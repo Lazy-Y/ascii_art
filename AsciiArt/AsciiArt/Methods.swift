@@ -9,13 +9,32 @@
 import Foundation
 import Darwin
 
+func writeToFile(text:String){
+    let format = NSDateFormatter()
+    format.dateFormat = "yy-MM-dd-hh-mm-ss"
+    let path = "/Users/" + NSUserName() + "/Desktop/" + format.stringFromDate(NSDate()) + ".cpp"
+    print(path)
+    do {
+        try text.writeToFile(path, atomically: false, encoding: NSUTF8StringEncoding)
+    }
+    catch {
+        print("Unable to write file")
+    }
+}
+
 func arrayFromContentsOfFileWithName(fileName: String) -> NSMutableString? {
     do {
-        let content = try NSMutableString(contentsOfFile:"/Users/ZhenyangZhong/Desktop/" + fileName, encoding: NSUTF8StringEncoding)
-        return content//.componentsSeparatedByString("\n")
+        let content = try NSMutableString(contentsOfFile:"/Users/" + NSUserName() + "/Desktop/" + fileName, encoding: NSUTF8StringEncoding)
+        return content
     }
     catch _ as NSError {
-        return nil
+        do {
+            let content = try NSMutableString(contentsOfFile:fileName, encoding: NSUTF8StringEncoding)
+            return content
+        }
+        catch _ as NSError{
+            return nil
+        }
     }
 }
 
@@ -34,22 +53,23 @@ func loadTemplate()->Array<Array<String>>{
     return retVal
 }
 
-func parseType(inout content: NSMutableString)->String{
-    removeSome(&content, patternString: "\\\\\n", replace: "`")
-    let pattern = try! NSRegularExpression(pattern: "#([^\"\n]|(\"[^\"\n]*\"))*\n", options: [])
-    let matches = pattern.matchesInString(content as String, options: [], range: content[0,content.length])
-    var str = ""
-    for match in matches{
-        str.appendContentsOf(content.substringWithRange(match.range))
-    }
-    removeSome(&content, patternString: pattern.pattern)
-    str.appendContentsOf("\n\n")
-    var newStr = NSMutableString(string: str)
-    removeSome(&newStr, patternString: "`", replace: "\\\\\n")
-    return newStr as String
-}
+//func parseType(inout content: NSMutableString)->String{
+//    removeSome(&content, patternString: "\\\\\n", replace: "`")
+//    let pattern = try! NSRegularExpression(pattern: "#([^\"\n]|(\"[^\"\n]*\"))*\n", options: [])
+//    let matches = pattern.matchesInString(content as String, options: [], range: content[0,content.length])
+//    var str = ""
+//    for match in matches{
+//        str.appendContentsOf(content.substringWithRange(match.range))
+//    }
+//    removeSome(&content, patternString: pattern.pattern)
+//    str.appendContentsOf("\n\n")
+//    var newStr = NSMutableString(string: str)
+//    removeSome(&newStr, patternString: "`", replace: "\\\\\n")
+//    return newStr as String
+//}
 
 func removeNonsense(inout content: NSMutableString)->NSMutableString{
+    removeSome(&content, patternString: "\\\\\n", replace: " ")
     var commentText = NSMutableString()
     var pattern = "//.*(\n)?"
     var re = try! NSRegularExpression(pattern: pattern, options: [])
@@ -59,8 +79,6 @@ func removeNonsense(inout content: NSMutableString)->NSMutableString{
         commentText.appendString(str)
     }
     removeSome(&content, patternString: pattern)
-    removeSome(&content, patternString: "[\n\t\r]")
-    pattern = "/\\*.*\\*/"
     re = try! NSRegularExpression(pattern: pattern, options: [])
     matches = re.matchesInString(content as String, options: [], range: NSRange(location: 0, length: content.length))
     for match in matches{
@@ -119,4 +137,11 @@ func parseContent(inout content : NSMutableString)->(Array<Token>,NSMutableStrin
     }
     optimizeCode(&arr)
     return (arr,commentText)
+}
+
+func cin() -> String {
+    let keyboard = NSFileHandle.fileHandleWithStandardInput()
+    let inputData = keyboard.availableData
+    let strData = NSString(data: inputData, encoding: NSUTF8StringEncoding)!
+    return strData.stringByTrimmingCharactersInSet(NSCharacterSet.newlineCharacterSet())
 }

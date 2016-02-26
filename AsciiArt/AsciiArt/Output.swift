@@ -51,6 +51,9 @@ internal class Tokens: NSObject {
     func shouldHaveSpace()->Bool{
         return index+1 < tokenArray.count ? tokenArray[index] is Type && tokenArray[index+1] is Type : false
     }
+    func isSpecialType()->Bool{
+        return tokenArray[index] is Type
+    }
 }
 
 internal class Template: NSObject{
@@ -62,6 +65,7 @@ internal class Template: NSObject{
     private let nonSpace = try! NSRegularExpression(pattern: "[^ ]", options: [])
     private let space = try! NSRegularExpression(pattern: " ", options: [])
     private var tokens : Tokens!
+    private var comments : Comment!
     
     var endLine:Bool{
         return index >= currLine.length
@@ -76,7 +80,8 @@ internal class Template: NSObject{
         return NSRange(location: index,length: currLine.length - index)
     }
     
-    required init(var input:NSMutableString, t:Tokens) {
+    required init(var input:NSMutableString, t:Tokens, comments : Comment) {
+        self.comments = comments
         tokens = t
         removeSome(&input, patternString: "[^a-zA-Z0-9]")
         let str = input.uppercaseString
@@ -86,6 +91,9 @@ internal class Template: NSObject{
             var index = 0
             if char > 60{
                 index = Int(char) - 65
+            }
+            else if Int(char) == 32{
+                index = 36
             }
             else {
                 index = Int(char) - 48 + 26
@@ -120,10 +128,127 @@ internal class Template: NSObject{
         }
     }
     
+    private func fillType(){
+        finishCurrLine()
+        let arr = tokens.peek.componentsSeparatedByString(" ")
+        for i in 0..<arr.count{
+            fillWord(arr[i], isEnd: i == arr.count-1)
+        }
+        finishCurrLine()
+    }
+    
+    private func fillWord(str:String, isEnd:Bool){
+        let length = getLength()
+        if length > str.length+1{
+            index+=str.length
+            output[line].appendContentsOf(str+" ")
+        }
+        else if length == str.length+1{
+            if index+str.length+1 == currLine.length{
+                if isEnd{
+                    output[line].appendContentsOf(str)
+                    autoEndl()
+                }
+                else {
+                    output[line].appendContentsOf(String(count: str.length, repeatedValue: Character(" ")))
+                    index+=str.length+1
+                }
+            }
+            else {
+                output[line].appendContentsOf(str + " ")
+                index+=str.length+1
+            }
+        }
+        else if length == str.length{
+            if index+length == currLine.length{
+                if length < 5{
+                    output[line].appendContentsOf(String(count: length-1, repeatedValue: Character(" "))+"\\")
+                }
+                else {
+                    output[line].appendContentsOf("/*"+((comments.getString(length-5)) as String)+"*/\\")
+                }
+                index+=length
+                autoEndl()
+                fillWord(str, isEnd: isEnd)
+            }
+            else{
+                output[line].appendContentsOf(str)
+                index+=length
+                autoAdvance()
+            }
+        }
+        else {
+            if length < 4{
+                output[line].appendContentsOf(String(count: length, repeatedValue: Character(" ")))
+            }
+            else {
+                output[line].appendContentsOf("/*"+((comments.getString(length-4)) as String)+"*/")
+            }
+            index+=length
+            if index == currLine.length && !isEnd{
+                output[line].replaceRange(output[line].getRange(index-1, j: 1), with: "\\")
+                autoEndl()
+            }
+            else {
+                autoAdvance()
+            }
+            fillWord(str, isEnd: isEnd)
+        }
+    }
+    
+    private func finishCurrLine(){
+        if index == 0{
+            return
+        }
+        let length = getLength()
+        if length == 0{
+            autoAdvance()
+        }
+        if getLength() > 2{
+            if index+length != currLine.length{
+                output[line].appendContentsOf("/*")
+                index+=2
+                for i in index..<currLine.length-2{
+                    if currLine[i] == " "{
+                        output[line].appendContentsOf(comments.getString(1) as String)
+                    }
+                    else {
+                        output[line].appendContentsOf(" ")
+                    }
+                }
+                output[line].appendContentsOf("*/")
+            }
+            else if length > 3{
+                output[line].appendContentsOf("/*"+(comments.getString(length-4) as String) + "*/")
+            }
+            else{
+                output[line].appendContentsOf(String(count: length, repeatedValue: Character(" ")))
+            }
+            index = currLine.length
+            autoEndl()
+        }
+        else {
+            output[line].appendContentsOf(String(count: length, repeatedValue: Character(" ")))
+            index+=length
+            if endLine{
+                autoEndl()
+                return
+            }
+            finishCurrLine()
+        }
+    }
+    
     internal func fill(var word:NSMutableString, consume:Bool = true)->Bool{
+        if consume && tokens.isSpecialType(){
+            fillType()
+            tokens.consume()
+            return true
+        }
+        var retVal = true
         if (getLength() > word.length && tokens.shouldHaveSpace()) || (word.substringToIndex(1) == "/" && index > 0 && output[line][index-1] == "*"){
             if word.length == 2{
                 word = "  "
+                retVal = false
             }
             else {
                 word = NSMutableString(string: " " + (word.substringToIndex(word.length-1) as String))
@@ -140,7 +265,7 @@ internal class Template: NSObject{
                 tokens.consume()
             }
             autoEndl()
-            return true
+            return retVal
         }
         else {
             return false
@@ -174,20 +299,23 @@ class ArtManager: NSObject {
     private var tokens:Tokens!
     private var template:Template!
     private var include:String!
-    required init(include: String, input_tokens:Array<Token>, input_comments:NSMutableString, input:NSMutableString) {
+    required init(input_tokens:Array<Token>, input_comments:NSMutableString, input:NSMutableString) {
         tokens = Tokens(arr: input_tokens)
         comments = Comment(content: input_comments)
-        template = Template(input: input, t: tokens)
-        self.include = include
+        template = Template(input: input, t: tokens, comments: comments)
     }
     func makeArt()->String{
         while !tokens.finished{
             let text = tokens.peek
             if !template.fill(text){
                 let length = template.getLength()
+                if length == 1{
+                    template.fill(" ", consume: false)
+                    continue
+                }
                 let str = "/*" + (comments.getString(length-2) as String)
                 if !template.fill(NSMutableString(string: str), consume: false){
-                    print("Fail",str,template.getLength())
+//                    print("Fail",str,template.getLength())
                     continue
                 }
                 if tokens.finished{
@@ -197,12 +325,12 @@ class ArtManager: NSObject {
                     break
                 }
                 else {
-                    while !template.fill(NSMutableString(string: "*/" + (tokens.peek as String))){
+                    while !template.fill(NSMutableString(string: "*/" + (tokens.peek as String)), consume: true){
                         template.fill(comments.getString(template.getLength()), consume: false)
                     }
                 }
             }
         }
-        return include! + template.output.joinWithSeparator("\n")
+        return template.output.joinWithSeparator("\n")
     }
 }

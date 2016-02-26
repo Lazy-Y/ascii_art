@@ -12,7 +12,7 @@ internal func startMatch(let content : NSMutableString, patternString : String)-
     if content.length < 1{
         return nil
     }
-    while content.substringToIndex(1) == " "{
+    while content.substringToIndex(1) == " " || content.substringToIndex(1) == "\t" || content.substringToIndex(1) == "\n" || content.substringToIndex(1) == "\r" {
         content.deleteCharactersInRange(NSRange(location: 0,length: 1))
         if content.length < 1{
             return nil
@@ -41,7 +41,8 @@ class Token : NSObject {
     internal(set) var val:NSMutableString!
     internal static var tempMatch:NSMutableString?
     class var pattern:String { get { return "" } }
-    init (str:NSMutableString){
+    init (var str:NSMutableString){
+        removeSome(&str, patternString: "[\t\n\r]")
         val = str
     }
     internal class func Match(let content:NSMutableString)->Bool{
@@ -79,7 +80,7 @@ class Operator: Token {
 
 class Operator1: Operator {
 //    [*=+-/%^&!;:~?,|\\\\\\.\\(\\)\\{\\}\\[\\]]
-    override class var pattern:String { get { return "[^a-zA-Z0-9\'\"<]" } }
+    override class var pattern:String { get { return "[^a-zA-Z0-9#\'\" \t\n\r]" } }
     override class func Consume(inout content:NSMutableString)->Operator1?{
         if !Match(content){
             return nil
@@ -99,17 +100,19 @@ class Operator2: Operator {
 }
 
 class Type : Token{
-    override class var pattern:String { get { return "#((include)|(ifn?def)|(pragma)|(define)|endif)" } }
+    override class var pattern:String { get { return "#([^\"\n]|(\"[^\"\n]*\"))*\n" } }
     override class func Consume(inout content:NSMutableString)->Type?{
         if !Match(content){
             return nil
         }
-        return Type(str: consumeToken(&content))
+        let str = consumeToken(&content)
+//        print("Type",str)
+        return Type(str: str)
     }
 }
 
 class Variable : Token{
-    override class var pattern:String { get { return "[a-zA-Z_][a-zA-Z0-9_]* ?" } }
+    override class var pattern:String { get { return "[a-zA-Z0-9_]+ ?" } }
     internal func rename(name: NSMutableString) {
         val = name
     }

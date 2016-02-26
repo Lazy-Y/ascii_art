@@ -31,6 +31,14 @@ extension String {
     subscript (i: Int, j: Int)->NSRange{
         return NSRange(location: i, length: j)
     }
+    
+    func substring(i: Int, j: Int)->String{
+        return self.substringWithRange(Range<Index>(start: characters.startIndex.advancedBy(i),end: characters.startIndex.advancedBy(j+i)))
+    }
+    
+    func getRange(i: Int, j: Int)->Range<Index>{
+        return Range<Index>(start: characters.startIndex.advancedBy(i),end: characters.startIndex.advancedBy(j+i))
+    }
 }
 
 extension NSMutableString{
