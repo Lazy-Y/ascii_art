@@ -140,13 +140,14 @@ internal class Template: NSObject{
     private func fillWord(str:String, isEnd:Bool){
         let length = getLength()
         if length > str.length+1{
-            index+=str.length
-            output[line].appendContentsOf(str+" ")
+            index+=str.length + 1
+            output[line].appendContentsOf(str + " ")
         }
         else if length == str.length+1{
             if index+str.length+1 == currLine.length{
                 if isEnd{
-                    output[line].appendContentsOf(str)
+                    output[line].appendContentsOf(str+" ")
+                    index+=str.length+1
                     autoEndl()
                 }
                 else {
@@ -155,7 +156,7 @@ internal class Template: NSObject{
                 }
             }
             else {
-                output[line].appendContentsOf(str + " ")
+                output[line].appendContentsOf(str+" ")
                 index+=str.length+1
             }
         }
@@ -172,8 +173,8 @@ internal class Template: NSObject{
                 fillWord(str, isEnd: isEnd)
             }
             else{
-                output[line].appendContentsOf(str)
-                index+=length
+                output[line].appendContentsOf(str+" ")
+                index+=length+1
                 autoAdvance()
             }
         }
@@ -186,7 +187,7 @@ internal class Template: NSObject{
             }
             index+=length
             if index == currLine.length && !isEnd{
-                output[line].replaceRange(output[line].getRange(index-1, j: 1), with: "\\")
+                output[line].replaceRange(output[line].getRange(index-3, j: 3), with: "*/\\")
                 autoEndl()
             }
             else {
